@@ -1,40 +1,69 @@
 // owl.js provides user-customizable plots of streaming time series data.
 
 var workspace = {
-    data: {},
     ws: null,
+    data: {},
     lastDataTimestamp: 0,
-    reset: function() {
-        data = {};
-    }
+    legendHeight: 60
 };
 
-var workspaceEl = document.getElementById('workspace');
+workspace.owlEl = d3.select('body').append('svg')
+    .attr("width", window.innerWidth)
+    .attr("height", window.innerHeight);
+
+workspace.legendEl = workspace.owlEl
+    .append('g');
+
+workspace.legendEl.append('text')
+    .classed('title', true)
+    .attr('x', 2)
+    .attr('y', 40)
+    .text('Owl');
+
+var owlFormat = d3.format('+12.3g');
 
 function Series(name) {
     this.name = name;
     this.t = [];
     this.raw = [];
-    this.legendEl = null;
+    var leg = workspace.legendEl
+        .append('g');
+    leg.append('text')
+        .classed('legend ' + name, true)
+        .attr('x', '2px')
+        .attr('y', workspace.legendHeight + 20)
+        .text(name);
+    this.legendEl = leg.append('text')
+        .classed('legend ' + name, true)
+        .attr('x', '50px')
+        .attr('y', workspace.legendHeight + 20);
     this.update = function(t, newdata) {
         this.t.push(t);
         this.raw.push(newdata);
-        // this.legendEl.innerText = newdata;
-        workspaceEl.innerText += this.name + ": " + newdata + " at time " + t + "\n";
-    }
+        this.legendEl.data([newdata])
+            .text(owlFormat);
+    };
+    workspace.legendHeight += 20
 }
 
-function connect() {
-    if (!window["WebSocket"]) {
-        alert("Your browser does not support websockets.");
+workspace.reset = function() {
+    workspace.data = {};
+    workspace.lastDataTimestamp = 0;
+    workspace.legendHeight = 50;
+    workspace.legendEl.selectAll('.legend').remove();
+};
+
+workspace.connect = function() {
+    if (!window['WebSocket']) {
+        alert('Your browser does not support websockets.');
         return
     }
 
-    workspace.ws = new WebSocket("ws://localhost:8000/websocket");
+    workspace.ws = new WebSocket('ws://localhost:8000/websocket');
 
     workspace.ws.onopen = function(e) {
         workspace.reset();
-        console.log("Websocket opened");
+        console.log('Websocket opened');
     };
 
     var data;
@@ -53,17 +82,19 @@ function connect() {
     };
 
     workspace.ws.onclose = function() {
-        console.log("Websocket closed");
+        console.log('Websocket closed');
     };
 
     workspace.ws.onerror = function(e) {
-        console.log("Websocket error: " + e);
+        console.log('Websocket error: ' + e);
     };
-}
+};
 
-connect();
+// Run
+
+workspace.connect();
 
 // If no websocket, try to connect every 2 seconds.
 setInterval(function() {
-    if (!workspace.ws || workspace.ws.readyState === WebSocket.CLOSED) { connect() }
+    if (!workspace.ws || workspace.ws.readyState === WebSocket.CLOSED) { workspace.connect() }
 }, 2000);

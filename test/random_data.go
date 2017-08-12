@@ -32,6 +32,12 @@ func main() {
 		fmt.Println("Served res/owl.css")
 	})
 
+	// Serve res/d3.js
+	http.HandleFunc("/res/d3.js", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r,"../res/d3.js")
+		fmt.Println("Served res/d3.js")
+	})
+
 	// Set up websocket
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize: 1024,
