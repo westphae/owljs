@@ -4,15 +4,24 @@ var workspace = {
     ws: null,
     data: {},
     lastDataTimestamp: 0,
+    height: window.innerHeight,
+    width: window.innerWidth,
     legendHeight: 60
 };
 
 workspace.owlEl = d3.select('body').append('svg')
-    .attr("width", window.innerWidth)
-    .attr("height", window.innerHeight);
+    .attr("width", workspace.width)
+    .attr("height", workspace.height);
 
 workspace.legendEl = workspace.owlEl
     .append('g');
+
+workspace.legendEl.append('line')
+    .classed('sep', true)
+    .attr('x1', 250)
+    .attr('x2', 250)
+    .attr('y1', 0)
+    .attr('y2', workspace.height);
 
 workspace.legendEl.append('text')
     .classed('title', true)
@@ -20,30 +29,39 @@ workspace.legendEl.append('text')
     .attr('y', 40)
     .text('Owl');
 
-var owlFormat = d3.format('+12.3g');
+workspace.connectedEl = workspace.legendEl.append('text')
+    .classed('status disconnected', true)
+    .attr('x', 100)
+    .attr('y', 40);
+
+var owlFormat = d3.format('+8.3g');
 var owlColors = d3.scaleOrdinal(d3.schemeCategory20);
 
 function Series(name) {
     this.name = name;
     this.t = [];
     this.raw = [];
-    var leg = workspace.legendEl
+    this.color = owlColors(name);
+    this.legendEl = workspace.legendEl
         .append('g')
-        .style('fill', owlColors(name));
-    leg.append('text')
         .classed('legend ' + name, true)
+        .style('fill', this.color);
+    this.legendEl.append('text')
         .attr('x', '2px')
         .attr('y', workspace.legendHeight + 20)
         .text(name);
-    this.legendEl = leg.append('text')
-        .classed('legend ' + name, true)
+    var val = this.legendEl.append('text')
         .attr('x', '50px')
         .attr('y', workspace.legendHeight + 20);
+    this.legendEl.append('text')
+        .classed('closer', true)
+        .attr('x', 150)
+        .attr('y', workspace.legendHeight + 20)
+        .text("×");
     this.update = function(t, newdata) {
         this.t.push(t);
         this.raw.push(newdata);
-        this.legendEl.data([newdata])
-            .text(owlFormat);
+        val.data([newdata]).text(owlFormat);
     };
     workspace.legendHeight += 20
 }
@@ -66,6 +84,10 @@ workspace.connect = function() {
 
     workspace.ws.onopen = function(e) {
         workspace.reset();
+        workspace.connectedEl
+            .classed('disconnected', false)
+            .classed('connected', true)
+            .text('connected');
         console.log('Websocket opened');
     };
 
@@ -85,6 +107,10 @@ workspace.connect = function() {
     };
 
     workspace.ws.onclose = function() {
+        workspace.connectedEl
+            .classed('disconnected', true)
+            .classed('connected', false)
+            .text('disconnected');
         console.log('Websocket closed');
     };
 

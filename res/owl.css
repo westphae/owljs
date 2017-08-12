@@ -5,11 +5,34 @@ body {
     background-color: midnightblue;
 }
 
+.sep {
+    stroke-width: 2;
+    stroke: lightgreen;
+    stroke-opacity: 0.6;
+}
+
 .title {
     font-size: 32px;
-    fill: #aaa;
+    fill: lightgreen;
+    opacity: 0.6;
 }
 
 .legend {
     font-size: 16px;
+}
+
+.status {
+    font-size: 10px;
+}
+
+.closer {
+    font-size: 10px;
+}
+
+.connected {
+    fill: lightgreen;
+}
+
+.disconnected {
+    fill: coral;
 }
