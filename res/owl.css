@@ -2,11 +2,12 @@ body {
     margin: 0;
     padding: 0;
     font-family: "Go Mono", Inconsolata, Courier, monospace;
+    background-color: midnightblue;
 }
 
 .title {
     font-size: 32px;
-    stroke: #555;
+    fill: #aaa;
 }
 
 .legend {

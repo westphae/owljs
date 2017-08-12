@@ -21,13 +21,15 @@ workspace.legendEl.append('text')
     .text('Owl');
 
 var owlFormat = d3.format('+12.3g');
+var owlColors = d3.scaleOrdinal(d3.schemeCategory20);
 
 function Series(name) {
     this.name = name;
     this.t = [];
     this.raw = [];
     var leg = workspace.legendEl
-        .append('g');
+        .append('g')
+        .style('fill', owlColors(name));
     leg.append('text')
         .classed('legend ' + name, true)
         .attr('x', '2px')
@@ -51,6 +53,7 @@ workspace.reset = function() {
     workspace.lastDataTimestamp = 0;
     workspace.legendHeight = 50;
     workspace.legendEl.selectAll('.legend').remove();
+    owlColors.domain([]);
 };
 
 workspace.connect = function() {
