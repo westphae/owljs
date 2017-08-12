@@ -26,6 +26,12 @@ func main() {
 		fmt.Println("Served res/owl.js")
 	})
 
+	// Serve res/owl.css
+	http.HandleFunc("/res/owl.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r,"../res/owl.css")
+		fmt.Println("Served res/owl.css")
+	})
+
 	// Set up websocket
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize: 1024,
@@ -42,7 +48,7 @@ func main() {
 
 		dat := make(map[string]float64)
 		noise := rand.New(rand.NewSource(99))
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(50 * time.Millisecond)
 		t0 := time.Now()
 		var t time.Time
 		for {
@@ -51,7 +57,7 @@ func main() {
 				if key == "T" {
 					dat[key] = float64(t.Sub(t0))/1e9
 				} else {
-					dat[key] = noise.Float64()
+					dat[key] = 2*noise.Float64() - 1
 				}
 			}
 			conn.WriteJSON(dat)
