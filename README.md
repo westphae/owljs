@@ -19,26 +19,25 @@ User-configurable plotting of multiple realtime time series data streams.
 * Receiver:
   * Subscribes to websocket.
   * Sends/receives ping/pong heartbeats, stops sending and closes websocket if heartbeat lost.
-  * Connected indication on right panel.
+  * Connected indication on left panel.
 * Data object: holds full raw data set (up to some max lookback for memory purposes).
   * Further back, compress into bars like smokeping.
-  * Appears as legend on right panel.
+  * Appears as legend on left panel.
   * User can drag from legend to plot component y-axes to add to plot.
-* TextDisplay object
-  * Initial: print all data, sorted alphabetically
-  * Allow user to order which data is printed
 * Plot object: specifies left and right y-axes.
   * All plots share common x-axis.
   * Plotted data is aggregated like smokeping; zooming re-aggregates.
   * Title contains legend for plot (text color matches lines).
   * User can drag title text back to Data object to remove from plot.
-* Right panel:
+* Left panel:
   * Title
   * Number showing data size (num records and time interval)
   * Reset button to clear out data
   * Signal buttons (e.g. AHRS reset/level button to restart AHRS)
   * Pause/Resume button to stop receiving new data (greyed out if no connection)
   * Legend: colored text with available (non-plotted) fields.
+  * Initially, print all fields, sorted in order in which it was received.
+  * Allow user to order which data is printed and delete fields.
   * Empty box to put an empty plot in main area.
   * Markers: horizontal, vertical - drag to axis to specify.
 * Workspace area:
@@ -53,7 +52,6 @@ User-configurable plotting of multiple realtime time series data streams.
 * Data object to hold data.
 * Receiver object to receive data.
 * Sending component in Go to have data to work with.
-* Workspace area 
-* Current Data object
 * Panel object
+* Workspace area 
 * Plot object
