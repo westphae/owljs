@@ -1,40 +1,45 @@
 // owl.js provides user-customizable plots of streaming time series data.
 
+var panelWidth = 200;
+
 var workspace = {
     ws: null,
     data: {},
+    trash: [],
     lastDataTimestamp: 0,
     height: window.innerHeight,
     width: window.innerWidth,
-    legendHeight: 60
 };
 
 workspace.owlEl = d3.select('body').append('svg')
     .attr("width", workspace.width)
     .attr("height", workspace.height);
 
-workspace.legendEl = workspace.owlEl
+workspace.panelEl = workspace.owlEl
     .append('g');
 
-workspace.legendEl.append('line')
+workspace.panelEl.append('line')
     .classed('sep', true)
-    .attr('x1', 250)
-    .attr('x2', 250)
+    .attr('x1', panelWidth)
+    .attr('x2', panelWidth)
     .attr('y1', 0)
     .attr('y2', workspace.height);
 
-workspace.legendEl.append('text')
+workspace.panelEl.append('text')
     .classed('title', true)
     .attr('x', 2)
     .attr('y', 40)
     .text('Owl');
 
-workspace.connectedEl = workspace.legendEl.append('text')
+workspace.connectedEl = workspace.panelEl.append('text')
+    .attr('text-anchor', 'end')
     .classed('status disconnected', true)
-    .attr('x', 100)
+    .attr('x', panelWidth - 20)
     .attr('y', 40);
 
-var owlFormat = d3.format('+8.3g');
+workspace.legendEl = workspace.panelEl.append('g');
+
+var owlFormat = d3.format('+5.3f');
 var owlColors = d3.scaleOrdinal(d3.schemeCategory20);
 
 function Series(name) {
@@ -42,35 +47,47 @@ function Series(name) {
     this.t = [];
     this.raw = [];
     this.color = owlColors(name);
-    this.legendEl = workspace.legendEl
-        .append('g')
+    var leg = workspace.legendEl
+        .selectAll('text')
+        .data(workspace.legendEl.selectAll('text').data().concat(name))
+        .enter()
+        .append('text')
         .classed('legend ' + name, true)
-        .style('fill', this.color);
-    this.legendEl.append('text')
-        .attr('x', '2px')
-        .attr('y', workspace.legendHeight + 20)
-        .text(name);
-    var val = this.legendEl.append('text')
-        .attr('x', '50px')
-        .attr('y', workspace.legendHeight + 20);
-    this.legendEl.append('text')
+        .style('fill', this.color)
+        .attr('x', 3)
+        .attr('y', function(d, i) { return 60+20*i; })
+        .text(function(d) { return String(d); });
+    var closer = leg.append('tspan')
         .classed('closer', true)
-        .attr('x', 150)
-        .attr('y', workspace.legendHeight + 20)
+        .attr("x", panelWidth - 15)
         .text("×");
+    this.legendEl = leg
+        .append('tspan')
+        .attr("text-anchor", "end")
+        .attr("x", panelWidth - 20);
     this.update = function(t, newdata) {
         this.t.push(t);
         this.raw.push(newdata);
-        val.data([newdata]).text(owlFormat);
+        this.legendEl.datum(newdata).text(owlFormat);
     };
-    workspace.legendHeight += 20
+
+    // Closure for events
+    function close_this() {
+        return function() {
+            workspace.trash.push(name);
+            leg.remove();
+            workspace.legendEl
+                .selectAll('text')
+                .attr('y', function(d, i) { return 60+20*i; })
+        }
+    }
+    closer.on('click', close_this())
 }
 
 workspace.reset = function() {
     workspace.data = {};
     workspace.lastDataTimestamp = 0;
-    workspace.legendHeight = 50;
-    workspace.legendEl.selectAll('.legend').remove();
+    workspace.panelEl.selectAll('.legend').remove();
     owlColors.domain([]);
 };
 
@@ -97,11 +114,13 @@ workspace.connect = function() {
         data = JSON.parse(e.data);
         workspace.lastDataTimestamp = (Date.now() - t0) / 1000;
         for (var key in data) {
-            try {
-                workspace.data[key].update(workspace.lastDataTimestamp, data[key])
-            } catch (e) {
-                workspace.data[key] = new Series(key);
-                workspace.data[key].update(workspace.lastDataTimestamp, data[key])
+            if (workspace.trash.indexOf(key) < 0) {
+                try {
+                    workspace.data[key].update(workspace.lastDataTimestamp, data[key])
+                } catch (e) {
+                    workspace.data[key] = new Series(key);
+                    workspace.data[key].update(workspace.lastDataTimestamp, data[key])
+                }
             }
         }
     };
