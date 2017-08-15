@@ -2,21 +2,33 @@
 
 var panelWidth = 200;
 
+
+// Workspace represents Owl as a whole: connection to server, legend, plot area, etc.
 var workspace = {
+    server: '192.168.86.100:8000/websocket',
     ws: null,
     data: {},
+    t: [],
     trash: [],
     lastDataTimestamp: 0,
-    height: window.innerHeight,
     width: window.innerWidth,
+    height: window.innerHeight,
+    n_wide: 1,
+    n_tall: 1,
+    plots: []
+};
+
+workspace.set_server = function(server) {
+    workspace.server = server;
+    workspace.close();
+    workspace.connect();
 };
 
 workspace.owlEl = d3.select('body').append('svg')
-    .attr("width", workspace.width)
-    .attr("height", workspace.height);
+    .attr('width', workspace.width)
+    .attr('height', workspace.height);
 
-workspace.panelEl = workspace.owlEl
-    .append('g');
+workspace.panelEl = workspace.owlEl.append('g');
 
 workspace.panelEl.append('line')
     .classed('sep', true)
@@ -39,6 +51,78 @@ workspace.connectedEl = workspace.panelEl.append('text')
 
 workspace.legendEl = workspace.panelEl.append('g');
 
+workspace.reset = function() {
+    workspace.data = {};
+    for (var k in workspace.plots) {
+        workspace.plots[k].svg.remove();
+    }
+    workspace.plots = [];
+    workspace.lastDataTimestamp = 0;
+    workspace.t = [];
+    workspace.panelEl.selectAll('.legend').remove();
+    owlColors.domain([]);
+};
+
+workspace.connect = function() {
+    if (!window['WebSocket']) {
+        alert('Your browser does not support websockets.');
+        return
+    }
+
+    workspace.ws = new WebSocket('ws://' + workspace.server);
+
+    workspace.ws.onopen = function(e) {
+        workspace.reset();
+        workspace.connectedEl
+            .classed('disconnected', false)
+            .classed('connected', true)
+            .text('connected');
+        console.log('Websocket opened');
+    };
+
+    var data,
+        t0 = Date.now(),
+        plotWidth = 300,
+        lastY = 20;
+    workspace.ws.onmessage = function(e) {
+        data = JSON.parse(e.data);
+        workspace.lastDataTimestamp = (Date.now() - t0) / 1000;
+        workspace.t.push(workspace.lastDataTimestamp);
+        for (var key in data) {
+            if (workspace.trash.indexOf(key) < 0) {
+                if (key in workspace.data) {
+                    workspace.data[key].update(workspace.lastDataTimestamp, data[key]);
+                    workspace.plots[key].update();
+                } else {
+                    workspace.data[key] = new Series(key);
+                    workspace.data[key].update(workspace.lastDataTimestamp, data[key]);
+                    workspace.plots[key] = MakePlot(panelWidth + 25, lastY, plotWidth);
+                    workspace.plots[key].add_y0_data(key);
+                    lastY += workspace.plots[key].height + 40;
+                }
+            }
+        }
+    };
+
+    workspace.ws.onclose = function() {
+        workspace.connectedEl
+            .classed('disconnected', true)
+            .classed('connected', false)
+            .text('disconnected');
+        console.log('Websocket closed');
+    };
+
+    workspace.ws.onerror = function(e) {
+        console.log('Websocket error: ' + e);
+    };
+};
+
+workspace.close = function() {
+    workspace.ws.close();
+};
+
+
+// Series object holds the data and references to its manifestations.
 var owlFormat = d3.format('+5.3f');
 var owlColors = d3.scaleOrdinal(d3.schemeCategory20);
 
@@ -59,12 +143,12 @@ function Series(name) {
         .text(function(d) { return String(d); });
     var closer = leg.append('tspan')
         .classed('closer', true)
-        .attr("x", panelWidth - 15)
-        .text("×");
+        .attr('x', panelWidth - 15)
+        .text('×');
     this.legendEl = leg
         .append('tspan')
-        .attr("text-anchor", "end")
-        .attr("x", panelWidth - 20);
+        .attr('text-anchor', 'end')
+        .attr('x', panelWidth - 20);
     this.update = function(t, newdata) {
         this.t.push(t);
         this.raw.push(newdata);
@@ -76,70 +160,140 @@ function Series(name) {
         return function() {
             workspace.trash.push(name);
             leg.remove();
+            delete workspace.data[name];
             workspace.legendEl
                 .selectAll('text')
                 .attr('y', function(d, i) { return 60+20*i; })
+            workspace.plots[name].svg.remove();
+
         }
     }
     closer.on('click', close_this())
 }
 
-workspace.reset = function() {
-    workspace.data = {};
-    workspace.lastDataTimestamp = 0;
-    workspace.panelEl.selectAll('.legend').remove();
-    owlColors.domain([]);
-};
 
-workspace.connect = function() {
-    if (!window['WebSocket']) {
-        alert('Your browser does not support websockets.');
-        return
-    }
-
-    workspace.ws = new WebSocket('ws://localhost:8000/websocket');
-
-    workspace.ws.onopen = function(e) {
-        workspace.reset();
-        workspace.connectedEl
-            .classed('disconnected', false)
-            .classed('connected', true)
-            .text('connected');
-        console.log('Websocket opened');
+// Plot object represents a plot "widget."
+function MakePlot(x, y, width) {
+    var plot = {
+        x: x,
+        y: y,
+        width: width,
+        height: width / 1.618,
+        y0vars: [],
+        data: []
     };
 
-    var data;
-    var t0 = Date.now();
-    workspace.ws.onmessage = function(e) {
-        data = JSON.parse(e.data);
-        workspace.lastDataTimestamp = (Date.now() - t0) / 1000;
-        for (var key in data) {
-            if (workspace.trash.indexOf(key) < 0) {
-                try {
-                    workspace.data[key].update(workspace.lastDataTimestamp, data[key])
-                } catch (e) {
-                    workspace.data[key] = new Series(key);
-                    workspace.data[key].update(workspace.lastDataTimestamp, data[key])
-                }
+    plot.xs = d3.scaleLinear()
+        .domain([0, workspace.lastDataTimestamp])
+        .range([0, plot.width]);
+    plot.y0s = d3.scaleLinear()
+        .range([plot.height, 0]);
+
+    plot.line = function(name) {
+        return d3.line()
+            // .curve(d3.curveBasis)
+            .x(function(d) { return plot.xs(d['T']); })
+            .y(function(d) { return plot.y0s(d[name]); })
+    };
+
+    plot.svg = workspace.owlEl.append('g')
+        .attr('transform', 'translate(' + plot.x + ',' + plot.y + ')');
+
+    plot.legend = plot.svg.append('g');
+
+    plot.xAxis = plot.svg.append('g')
+        .classed('x axis', true)
+        .attr('transform', 'translate(0,' + plot.y0s(0) + ')')
+        .call(d3.axisBottom(plot.xs));
+
+    plot.y0Axis = plot.svg.append('g')
+        .classed('y axis', true)
+        .call(d3.axisLeft(plot.y0s));
+
+    plot.lines = plot.svg.append('g');
+
+    plot.add_y0_data = function(name) {
+        var domain = d3.extent(workspace.data[name].raw);
+        if (plot.y0vars.length > 0) {
+            var curdomain = plot.y0s.domain();
+            domain = [curdomain[0] < domain[0] ? curdomain[0] : domain[0],
+                curdomain[1] > domain[1] ? curdomain[1] : domain[1]];
+            for (var i=0; i<workspace.t.length; i++) {
+                plot.data[i][name] = workspace.data[name].raw[i]
             }
+        } else {
+            var data;
+            for (var i=0; i<workspace.t.length; i++) {
+                data = {'T': workspace.t[i]};
+                data[name] = workspace.data[name].raw[i];
+                plot.data.push(data)
+            }
+        }
+        plot.y0vars.push(name);
+        plot.y0s.domain(domain);
+        plot.legend
+            .selectAll('text')
+            .data(plot.y0vars)
+            .enter()
+            .append('text')
+            .classed('legend', true)
+            .attr('text-anchor', 'start')
+            .attr('x', function(d, i) { return 20*i + 5; })
+            .attr('dy', 0)
+            .style('fill', function(d) { return workspace.data[d].color; })
+            .text(function(d) { return d; });
+
+        if (workspace.data[name].raw.length > 1) {
+            plot.lines
+                .selectAll('.line')
+                .data([plot.data])
+                .enter()
+                .append('path')
+                .classed('line', true)
+                .attr('d', plot.line(name))
+                .style('stroke', workspace.data[name].color);
         }
     };
 
-    workspace.ws.onclose = function() {
-        workspace.connectedEl
-            .classed('disconnected', true)
-            .classed('connected', false)
-            .text('disconnected');
-        console.log('Websocket closed');
+    plot.update = function() {
+        plot.xs.domain([0, workspace.lastDataTimestamp]);
+        plot.xAxis.call(d3.axisBottom(plot.xs));
+        var total_domain = [0, 0];
+        plot.y0vars.forEach(function(name) {
+            var domain = d3.extent(workspace.data[name].raw);
+            total_domain = [total_domain[0] < domain[0] ? total_domain[0] : domain[0],
+                total_domain[1] > domain[1] ? total_domain[1] : domain[1]];
+        });
+        for (var i=plot.data.length; i<workspace.t.length; i++) {
+            var data = {'T': workspace.t[i]};
+            plot.y0vars.forEach(function(name) {
+                data[name] = workspace.data[name].raw[i]
+                debugger;
+            });
+            plot.data[i] = data;
+        }
+        plot.y0s.domain(total_domain);
+        plot.y0Axis.call(d3.axisLeft(plot.y0s));
+
+        plot.y0vars.forEach(function(name) {
+            plot.lines
+                .selectAll('.line')
+                .data([plot.data])
+                .enter()
+                .append('path')
+                .classed('line', true);
+            plot.lines
+                .selectAll('.line')
+                .attr('d', plot.line(name))
+                .style('stroke', workspace.data[name].color);
+        });
     };
 
-    workspace.ws.onerror = function(e) {
-        console.log('Websocket error: ' + e);
-    };
-};
+    return plot;
+}
 
-// Run
 
+// Run the system.
 workspace.connect();
 
 // If no websocket, try to connect every 2 seconds.
