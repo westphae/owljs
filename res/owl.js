@@ -1,7 +1,7 @@
 // owl.js provides user-customizable plots of streaming time series data.
 
-var panelWidth = 200;
-
+var panelWidth = 200,
+    goldenRatio = 1.618;
 
 // Workspace represents Owl as a whole: connection to server, legend, plot area, etc.
 var workspace = {
@@ -13,8 +13,6 @@ var workspace = {
     lastDataTimestamp: 0,
     width: window.innerWidth,
     height: window.innerHeight,
-    n_wide: 1,
-    n_tall: 1,
     plots: []
 };
 
@@ -51,10 +49,36 @@ workspace.connectedEl = workspace.panelEl.append('text')
 
 workspace.legendEl = workspace.panelEl.append('g');
 
+workspace.insertChart = function(i, j, name) {
+    if (j >= workspace.plots.length) {
+        j = workspace.plots.length;
+        i = 0;
+        workspace.plots.push([])
+    }
+    if (i > workspace.plots[j]) {
+        i = workspace.plot[j];
+    }
+    var plotWidth,
+        plotHeight = 30;
+    workspace.plots[j].splice(i, 0, MakePlot(0, 0, 1));
+    workspace.plots[j][i].add_y0_data(name);
+    for (j=0; j < workspace.plots.length; j++) {
+        nCol = workspace.plots[j].length;
+        plotWidth = (workspace.width - (panelWidth + 30)) / nCol - 30;
+        for (i=0; i < workspace.plots[j].length; i++) {
+            workspace.plots[j][i].reshape(panelWidth + 30 + (plotWidth+30)*i, plotHeight, plotWidth);
+        }
+        plotHeight += plotWidth / goldenRatio + 30;
+    }
+    workspace.owlEl.attr('height', plotHeight);
+};
+
 workspace.reset = function() {
     workspace.data = {};
-    for (var k in workspace.plots) {
-        workspace.plots[k].svg.remove();
+    for (j=0; j < workspace.plots.length; j++) {
+        for (i=0; i < workspace.plots[j].length; i++) {
+            workspace.plots[j][i].svg.remove();
+        }
     }
     workspace.plots = [];
     workspace.lastDataTimestamp = 0;
@@ -82,24 +106,26 @@ workspace.connect = function() {
 
     var data,
         t0 = Date.now(),
-        plotWidth = 300,
-        lastY = 20;
+        n = 0;
     workspace.ws.onmessage = function(e) {
         data = JSON.parse(e.data);
         workspace.lastDataTimestamp = (Date.now() - t0) / 1000;
         workspace.t.push(workspace.lastDataTimestamp);
         for (var key in data) {
             if (workspace.trash.indexOf(key) < 0) {
-                if (key in workspace.data) {
-                    workspace.data[key].update(workspace.lastDataTimestamp, data[key]);
-                    workspace.plots[key].update();
-                } else {
+                if (!(key in workspace.data)) {
                     workspace.data[key] = new Series(key);
                     workspace.data[key].update(workspace.lastDataTimestamp, data[key]);
-                    workspace.plots[key] = MakePlot(panelWidth + 25, lastY, plotWidth);
-                    workspace.plots[key].add_y0_data(key);
-                    lastY += workspace.plots[key].height + 40;
+                    workspace.insertChart(n-3*Math.floor(n/3), Math.floor(n/3), key);
+                    n++;
+                } else {
+                    workspace.data[key].update(workspace.lastDataTimestamp, data[key]);
                 }
+            }
+        }
+        for (var j=0; j < workspace.plots.length; j++) {
+            for (var i=0; i < workspace.plots[j].length; i++) {
+                workspace.plots[j][i].update();
             }
         }
     };
@@ -178,7 +204,7 @@ function MakePlot(x, y, width) {
         x: x,
         y: y,
         width: width,
-        height: width / 1.618,
+        height: width / goldenRatio,
         y0vars: [],
         data: []
     };
@@ -268,7 +294,6 @@ function MakePlot(x, y, width) {
             var data = {'T': workspace.t[i]};
             plot.y0vars.forEach(function(name) {
                 data[name] = workspace.data[name].raw[i]
-                debugger;
             });
             plot.data[i] = data;
         }
@@ -287,6 +312,19 @@ function MakePlot(x, y, width) {
                 .attr('d', plot.line(name))
                 .style('stroke', workspace.data[name].color);
         });
+    };
+
+    plot.reshape = function(xx, yy, ww) {
+        plot.x = xx;
+        plot.y = yy;
+        plot.width = ww;
+        plot.height = ww / goldenRatio;
+        plot.xs.range([0, plot.width]);
+        plot.y0s.range([plot.height, 0]);
+        plot.svg.attr('transform', 'translate(' + plot.x + ',' + plot.y + ')');
+        plot.xAxis.attr('transform', 'translate(0,' + plot.height + ')')
+            .call(d3.axisBottom(plot.xs));
+        plot.y0Axis.call(d3.axisLeft(plot.y0s));
     };
 
     return plot;
