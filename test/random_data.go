@@ -42,7 +42,9 @@ func main() {
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize: 1024,
 		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool { return true },
 	}
+
 	http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Processing websocket")
 		conn, err := upgrader.Upgrade(w, r, nil)
