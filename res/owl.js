@@ -149,7 +149,7 @@ workspace.close = function() {
 
 
 // Series object holds the data and references to its manifestations.
-var owlFormat = d3.format('+5.3f');
+var owlFormat = d3.format('+8.5g');
 var owlColors = d3.scaleOrdinal(d3.schemeCategory20);
 
 function Series(name) {
@@ -189,9 +189,8 @@ function Series(name) {
             delete workspace.data[name];
             workspace.legendEl
                 .selectAll('text')
-                .attr('y', function(d, i) { return 60+20*i; })
+                .attr('y', function(d, i) { return 60+20*i; });
             workspace.plots[name].svg.remove();
-
         }
     }
     closer.on('click', close_this())
